@@ -1,0 +1,393 @@
+2. Master Technical Specification & Antigravity Prompt
+Niche poora, end-to-end Architecture Document aur Master Prompt hai. Aap ne isay bas Copy-Paste karke seedha Antigravity ko dena hai. Is mein 2v2 Team Mode, Official 10x10 Board Matrix, Mathematical AI Engine, aur Premium UI/UX ki ek-ek line defined hai.
+
+Markdown
+# MASTER ARCHITECTURAL SPECIFICATION & PROMPT FOR ANTIGRAVITY
+**Project Title:** SEQUENCE — Pro 2v2 Team & Mathematical AI Edition
+**Role:** Act as a Principal Game Architect, Senior Python Developer, and Game AI Mathematician.
+**Objective:** Build a complete, production-ready, highly polished, playable implementation of the official board game "Sequence" in Python using `pygame-ce` (or standard `pygame`), featuring a 2v2 Team Mode (Human + AI Teammate vs. 2 Hardcore Mathematical AI Agents) and a sleek, modern casino-grade UI.
+
+---
+
+## 1. GAME MODES & TEAM ARCHITECTURE (2v2 FOCUS)
+Design the game engine to support flexible seating and team structures, specifically prioritizing **4-Player 2v2 Team Mode**:
+1. **Seating & Turn Order (Alternating Teams):**
+   - **Seat 0 (Bottom):** Player 1 — Human (Team Blue)
+   - **Seat 1 (Left):** Player 2 — AI Opponent Alpha (Team Green)
+   - **Seat 2 (Top):** Player 3 — AI Partner / Human 2 (Team Blue - Teammate of Seat 0)
+   - **Seat 3 (Right):** Player 4 — AI Opponent Beta (Team Green - Teammate of Seat 1)
+   - *Rule:* Teammates share the exact same chip color (`BLUE` vs `GREEN`) and work together toward the same sequences. Turn order strictly alternates between teams (`Seat 0 -> Seat 1 -> Seat 2 -> Seat 3`).
+2. **Configurable Lobby Setup (Pre-Game Screen):**
+   - **Mode A (Default - 1 Human + 3 AI in 2v2):** You + AI Teammate vs. 2 AI Opponents (6 cards dealt each, 2 sequences needed to win).
+   - **Mode B (2 Humans + 2 AI in 2v2):** Two Humans on Team Blue vs. Two AI Agents on Team Green (or 1 Human + 1 AI per team).
+   - **Mode C (1v1 Duel):** 1 Human vs. 1 AI (7 cards each, 2 sequences to win).
+   - **Mode D (1v1v1 Cutthroat):** 3 Players ( Blue, Green, Red — 6 cards each, 1 sequence to win).
+3. **Table Talk Rule Enforcement:**
+   - Teammates cannot see each other's hands. The AI Teammate must deduce the Human partner's strategy purely from board state, discard history, and probability—never by peeking at the Human's hand array in memory (Zero-Cheat AI Architecture).
+
+---
+
+## 2. OFFICIAL 10x10 BOARD MATRIX (EXACT SPIRAL LAYOUT)
+Hardcode the exact official 10x10 Sequence board matrix so every card (except Jacks) appears **twice**:
+- `FREE` = Corner wild spaces at `(0,0)`, `(0,9)`, `(9,0)`, and `(9,9)`.
+- Suits: `S` (Spades ♠), `H` (Hearts ♥), `D` (Diamonds ♦), `C` (Clubs ♣).
+- Ranks: `2, 3, 4, 5, 6, 7, 8, 9, 10, Q, K, A`.
+
+Use this exact 10x10 2D array in the `Board` class:
+```python
+OFFICIAL_BOARD_LAYOUT = [
+    ["FREE", "2S", "3S", "4S", "5S", "6S", "7S", "8S", "9S", "FREE"],
+    ["6C",   "5C", "4C", "3C", "2C", "AH", "KH", "QH", "10H", "10S"],
+    ["7C",   "AS", "2D", "3D", "4D", "5D", "6D", "7D", "9H",  "QS"],
+    ["8C",   "KS", "6C", "5C", "4C", "3C", "2C", "8D", "8H",  "KS"],
+    ["9C",   "QS", "7C", "6H", "5H", "4H", "AH", "9D", "7H",  "AS"],
+    ["10C",  "10S","8C", "7H", "2H", "3H", "KH", "10D","6H",  "2D"],
+    ["QC",   "9S", "9C", "8H", "9H", "10H","QH", "QD", "5H",  "3D"],
+    ["KC",   "8S", "10C","QC", "KC", "AC", "AD", "KD", "4H",  "4D"],
+    ["AC",   "7S", "6S", "5S", "4S", "3S", "2S", "2H", "3H",  "5D"],
+    ["FREE", "AD", "KD", "QD", "10D","9D", "8D", "7D", "6D",  "FREE"]
+]
+3. CORE RULES & SEQUENCE INTERSECTION ENGINE
+Deck Specification:
+
+104 cards total (Two standard 52-card decks combined, no Jokers).
+
+Cryptographically or Mersenne-Twister shuffled (random.SystemRandom() for true entropy).
+
+Dead Card Rule:
+
+During a player's turn, BEFORE playing a card, if they hold a non-Jack card whose both corresponding board coordinates (r1, c1) and (r2, c2) are already occupied by any chip, that card is marked DEAD.
+
+The player may discard 1 dead card per turn, immediately draw a replacement card, and then proceed with their normal turn.
+
+Jack Rules:
+
+Two-Eyed Jacks (JC, JD): Wild Card. Place a team chip on any unoccupied space on the board.
+
+One-Eyed Jacks (JH, JS): Anti-Wild Card. Remove any one opponent chip from the board, EXCEPT a chip that is already LOCKED in a completed 5-chip sequence.
+
+76-Line Sliding Window Sequence Detection & Locking:
+
+There are exactly 76 possible 5-in-a-row segments (windows of length 5) across the 10x10 grid:
+
+10 rows × 6 horizontal windows = 60? Wait: in a 10-length line, a window of 5 slides 6 times (0..4, 1..5, 2..6, 3..7, 4..8, 5..9).
+
+Horizontal: 10 rows × 6 = 60 windows.
+
+Vertical: 10 cols × 6 = 60 windows.
+
+Main Diagonals (NW to SE, length >= 5): 1 + 2 + 3 + 4 + 5 + 6 + 5 + 4 + 3 + 2 + 1 = 36 windows.
+
+Anti-Diagonals (NE to SW, length >= 5): 36 windows.
+
+Total = 192 distinct 5-cell windows on the 10x10 board.
+
+Corner Rule: Corners (0,0), (0,9), (9,0), (9,9) act as permanently occupied by ALL teams simultaneously (only 4 team chips needed adjacent to a corner in a window).
+
+Overlap & Locking Rule:
+
+Once a 5-cell window is completed by a team, all non-corner coordinates in that window are added to locked_cells[team_id] and cannot be removed by a One-Eyed Jack.
+
+A second sequence for the same team is valid if and only if it shares at most 1 non-corner cell (or 1 cell total) with any previously registered sequence of that team. (e.g., 6-in-a-row in the same direction shares 4 cells -> invalid as a 2nd sequence; 9-in-a-row in the same line sharing the center 5th chip -> valid as 2 sequences; two perpendicular lines crossing at 1 chip -> valid as 2 sequences).
+
+4. HARDCORE MATHEMATICAL & PROBABILISTIC AI ENGINE
+Do NOT use simple random moves. Implement a MathematicalSequenceAI class using Heuristic Utility Maximization + Hypergeometric Card Counting + Stochastic Tie-Breaking:
+
+A. Public Memory & Card Counting (Bayesian / Hypergeometric Tracker)
+The AI maintains a legal CardTracker that only observes public information (the discard pile, current board chips, and the AI's own private hand):
+
+For every card rank/suit 
+c, total initial copies 
+N 
+c
+​
+ =2.
+
+Remaining unseen copies 
+U(c)=2−Discarded(c)−InMyHand(c).
+
+Total unseen cards in Deck + Other Hands = 
+M.
+
+Probability that at least one copy of card 
+c is currently live in play or drawable:
+
+P 
+live
+​
+ (c)= 
+M
+U(c)
+​
+ 
+Probability of Two-Eyed Jacks (JC, JD) remaining:
+
+P 
+wild
+​
+ = 
+M
+U(JC)+U(JD)
+​
+ 
+Probability of One-Eyed Jacks (JH, JS) remaining:
+
+P 
+remove
+​
+ = 
+M
+U(JH)+U(JS)
+​
+ 
+B. 192-Window Potential & Threat Evaluation Function
+For every candidate move 
+m (either placing a chip at (r, c) or removing an enemy chip at (r, c)), evaluate the resulting board state 
+B 
+′
+  across all 192 five-cell windows 
+W={w 
+1
+​
+ ,w 
+2
+​
+ ,…,w 
+192
+​
+ }:
+
+For each window 
+w 
+i
+​
+ :
+
+Let 
+T be the count of Team chips (including FREE corners) in 
+w 
+i
+​
+ .
+
+Let 
+E be the count of Enemy chips (excluding FREE corners) in 
+w 
+i
+​
+ .
+
+Let 
+O be the count of Open (empty) spaces in 
+w 
+i
+​
+ .
+
+Blocked Window: If both 
+T>0 (non-corner) and 
+E>0 (non-corner), the window cannot be completed without a One-Eyed Jack. Discount its weight by 
+0.15×P 
+remove
+​
+ .
+
+Offensive Window Viability (
+E==0):
+
+For each open cell 
+s∈w 
+i
+​
+ , compute its fill probability 
+p(s)=P 
+live
+​
+ (card(s))+P 
+wild
+​
+ .
+
+Window viability factor: 
+Φ(w 
+i
+​
+ )=∏ 
+s∈Open(w 
+i
+​
+ )
+​
+ max(0.1,p(s)).
+
+Assign exponential base weights based on 
+T:
+
+T=5⟹+100,000 (Instant Sequence Completion!)
+
+T=4,O=1⟹+4,500×Φ(w 
+i
+​
+ ) (1 away from sequence)
+
+T=3,O=2⟹+650×Φ(w 
+i
+​
+ )
+
+T=2,O=3⟹+80×Φ(w 
+i
+​
+ )
+
+T=1,O=4⟹+10×Φ(w 
+i
+​
+ )
+
+Defensive Threat Urgency (
+T 
+non-corner
+​
+ ==0,E>0):
+
+Calculate enemy completion likelihood 
+Ψ(w 
+i
+​
+ ) using unseen cards for open cells in 
+w 
+i
+​
+ .
+
+If Enemy is at 
+E=4,O=1: Blocking that single open cell (r, c) gets a Critical Defensive Bonus of 
++25,000×Ψ(w 
+i
+​
+ ).
+
+If Enemy is at 
+E=3,O=2: Blocking gets 
++1,200×Ψ(w 
+i
+​
+ ).
+
+C. Positional & Synergy Multipliers
+Multi-Line Intersection Bonus (Fork Creation): If placing a chip at (r, c) simultaneously advances 
+≥2 viable team windows to 
+T≥3, multiply the score by 
+1.35× (creates unstoppable double-threats).
+
+Center Control Gravity: Add a centrality prior:
+
+C(r,c)=15−2×(∣r−4.5∣+∣c−4.5∣)
+(Center cells participate in up to 20 different 5-cell windows; edge cells participate in far fewer).
+
+Duplicate Card Preservation: If the AI holds a card where one board spot is highly strategic and the other isn't, play the strategic spot. If the AI holds two cards that can play in the same window, prioritize the card that has only 1 open spot left on the board (to prevent it from becoming a Dead Card later).
+
+Jack Conservation Policy:
+
+Two-Eyed Jack (JC, JD): Apply a threshold penalty of 
+−3,200 so the AI NEVER wastes a Two-Eyed Jack on an early/low-value move. It will only deploy a Two-Eyed Jack when the move yields a Sequence (
+T=5), creates a lethal double-threat (
+T=4 in two directions), or is the only way to block an immediate enemy win.
+
+One-Eyed Jack (JH, JS): Apply a threshold penalty of 
+−2,200. Only play a One-Eyed Jack to break an enemy 
+E=4 threat, dismantle a high-intersection enemy hub chip (a chip sitting on 
+≥3 active enemy windows of 
+E≥3), or unblock a 
+T=4 team window where the 5th spot is occupied by an enemy chip!
+
+Controlled Softmax / Guassian Jitter (Unpredictability):
+
+Among moves within 
+3% of the maximum utility score, apply small Gaussian noise 
+N(0,σ 
+2
+ ) so the AI is mathematically lethal yet never robotic or predictable across games.
+
+5. PREMIUM UI/UX DESIGN SPECIFICATION (pygame 1440x900 HD)
+Build a bespoke, procedural Vector-Style UI in pygame (zero external image assets required—render crisp anti-aliased cards, suit icons, 3D-styled poker chips, and glassmorphic panels via pygame.gfxdraw and pygame.draw):
+
+Resolution & Layout (1440 × 900, 60 FPS):
+
+Background: Deep Emerald Casino Felt (#0B2B26 radial gradient to #051614).
+
+Center Stage (720 × 720 px): The 10×10 Sequence Board.
+
+Each cell (70 × 70 px) renders as a mini playing card with rounded corners (border_radius=6), cream parchment face (#FAF6F0), crisp rank text, and custom-drawn geometric vector Suit Pips (♠ ♥ ♦ ♣).
+
+Corner cells render gold-bordered ★ FREE ★ emblems.
+
+Interactive Hover & Ghost Highlighting (Crucial UX):
+
+When the Human hovers over any card in their hand at the bottom:
+
+Immediately highlight the 2 matching cells on the 10×10 board with a pulsing Gold Glow (#FFD700) and draw a translucent "Ghost Chip" preview on valid targets.
+
+If the card is a Dead Card, badge the card in the hand with a red DEAD - CLICK TO SWAP ribbon and a one-click "Exchange Dead Card" button.
+
+If the card is a Two-Eyed Jack, highlight all valid empty board cells in subtle Cyan.
+
+If the card is a One-Eyed Jack, highlight all removable enemy chips in Crimson Red.
+
+3D Poker Chip Rendering:
+
+Placed chips must not block the card identity completely or should sit cleanly with an inner ring, outer dashed casino stripes, drop shadow, and subtle specular highlight (Team Blue: #2563EB / #60A5FA, Team Green: #10B981 / #34D399, Team Red: #EF4444 / #F87171).
+
+Locked Sequence Chips: Render a gleaming Gold Crown / Star Ring around locked chips and draw a glowing laser line connecting the 5 cells of any completed Sequence.
+
+Right Sidebar (HUD & AI Telemetry Panel - 380 px wide):
+
+Team Scoreboard: Shows Team Blue vs. Team Green Sequences (0/2, 1/2, 2/2).
+
+Turn Indicator & AI Thinking Animation: Smooth 600ms delay when AI agents take their turn so the human can visually follow what each AI agent played, with a glowing last-move indicator ring on the board.
+
+Live Move Log & Probability Feed: Shows the last 8 actions (e.g., "AI Partner (Seat 2) played 10♠ at (1,9) — Threat Level High").
+
+Deck & Discard Pile Counter: Shows remaining cards in draw pile, top discard card, and unseen Jacks count.
+
+6. CODE ARCHITECTURE & DELIVERABLE REQUIREMENTS
+Structure the code cleanly using OOP (either in a single well-organized file sequence_pro.py or modular package):
+
+Card & Deck: Full 104-card double deck, shuffle, draw, discard, and serialization.
+
+Board: 10×10 grid state, coordinate lookup dictionary card_to_coords, 192-window precomputation, sequence locking, and overlap validation.
+
+CardTracker: Public memory probability engine for unseen cards and Jack tracking.
+
+Player & MathematicalSequenceAI: Human input handler and the full heuristic/probabilistic AI agent.
+
+SequenceRenderer & GameEngine: Complete 60-FPS Pygame event loop, main menu (Mode Selector: 2v2 Human+AI vs 2 AI, 2v2 2-Humans vs 2 AI, 1v1, 1v1v1), dead-card exchange button, animated chip transitions, and "Play Again" screen.
+
+Zero Placeholders: Write 100% complete, runnable Python code with no TODOs or omitted methods.
+
+
+---
+
+### 3. Antigravity mein Isay Run aur Test Kaise Karein?
+
+Jab aap yeh prompt Antigravity mein paste karenge, toh woh aapke liye poora project generate kar dega. Is mein kuch khaas cheezein hain jo aapke experience ko next level par le jayengi:
+
+| Feature | Kaise Kaam Karega? |
+| :--- | :--- |
+| **Team Selection (2v2 Mode)** | Game start hote hi Lobby Screen aayegi. Wahan aap **2v2 Team Mode** select kar sakte hain: **Team 1 (Aap + AI Partner)** vs **Team 2 (AI Agent Alpha + AI Agent Beta)**, ya phir **2 Real Players vs 2 AI Agents** (Hotseat/Pass-and-play ya shared screen). |
+| **Zero-Cheat AI Partner** | Aksar log shikayat karte hain ke AI cheating karta hai. Is prompt mein humne **Public Card Tracker** enforce kiya hai—yani AI ko aapke haath ke pattay nahi pata honge, lekin woh board par aapki chal (moves) dekh kar samajh jayega ke aap konsi line bana rahe hain aur aapki madad karega! |
+| **Mathematical Difficulty** | AI har turn par **192 winning windows** (5-in-a-row possibilities) ko check karega aur **Hypergeometric Probability** se hisaab lagayega ke konsa card abhi deck mein bacha hai aur konsa discard ho chuka hai. |
+| **Zero External Assets** | Aksar Pygame projects is liye crash hote hain kyunke unko `.png` images nahi milti. Is prompt mein humne **Procedural Vector Rendering** likhwayi hai—yani saare cards, suits (`♠ ♥ ♦ ♣`), aur 3D chips code ke zariye draw honge. Ek command (`pip install pygame-ce` ya `pip install pygame`) se game foran chal paregi. |
+
+---
+
+### 4. Agar Aap Isay Web Browser (Next.js / React) Par Live Karna Chahein?
+Aap ne zikr kiya ke *"taake main is game ko proper live kar sakoon"*. 
+* Agar aap isay **Desktop App (Python/Pygame)** ke bajaye **Web Browser (Next.js + Tailwind CSS + Framer Motion)** par deploy karna chahte hain (jaise Vercel par live link, jahan aap aur aapka dost alag-alag PC/Mobile se online 2v2 khel sakein vs 2 AI Agents), toh mujhe batayein! Main is prompt ko **Next.js + TypeScript + Canvas/WebSockets** ke mutabiq convert kar doonga jo browser mein aur bhi zyada khoobsurat dikhegi.
+
+<ElicitationsGroup message="Is project ko agay barhane ke liye aap kya chahenge?">
+  <Elicitation label="Convert this spec to Next.js Web App for Vercel deployment" query="Convert this entire Sequence 2v2 & Mathematical AI specification into a Next.js + TypeScript + Tailwind CSS + Framer Motion prompt for Antigravity so I can deploy it live on the web."/>
+  <Elicitation label="Write the complete Python Pygame code right now" query="Generate the complete, runnable Python Pygame code based on this exact specification right now."/>
+  <Elicitation label="Add online multiplayer WebSockets spec for 2 real players" query="Add a multiplayer synchronization architecture so two human players on different devices can team up against the two AI agents in real time."/>
+</ElicitationsGroup>
