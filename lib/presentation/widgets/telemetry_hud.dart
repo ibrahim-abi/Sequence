@@ -29,7 +29,7 @@ class TelemetryHud extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header / Logo with gold metallic touch
+          // Header / Logo
           Row(
             children: [
               Container(
@@ -64,9 +64,9 @@ class TelemetryHud extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
 
-          // Glassmorphic Scoreboard Box
+          // Scoreboard Box
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -130,7 +130,70 @@ class TelemetryHud extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
+
+          // Bot Brain Real-time Strategy Card
+          if (controller.latestBotIntent != null || controller.latestBotThought != null) ...[
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF0C2B24), Color(0xFF041512)],
+                ),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFFFD700).withValues(alpha: 0.35)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.psychology, size: 14, color: Color(0xFFFFD700)),
+                      const SizedBox(width: 6),
+                      const Text(
+                        "AI BRAIN STRATEGY",
+                        style: TextStyle(
+                          color: Color(0xFFFFD700),
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (controller.latestBotIntent != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0284C7).withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            controller.latestBotIntent!.name.toUpperCase(),
+                            style: const TextStyle(
+                              color: Color(0xFF38BDF8),
+                              fontSize: 8.0,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (controller.latestBotThought != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      controller.latestBotThought!,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
 
           // Deck & Discard Counters in Glassmorphic tiles
           Row(
@@ -154,11 +217,11 @@ class TelemetryHud extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
           // Live Turn Telemetry
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color: const Color(0xFF0F3229),
               borderRadius: BorderRadius.circular(8),
@@ -183,7 +246,7 @@ class TelemetryHud extends StatelessWidget {
                     "Turn: ${controller.currentPlayer.name}",
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 12,
+                      fontSize: 11.5,
                       fontWeight: FontWeight.w700,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -192,16 +255,16 @@ class TelemetryHud extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
           // Action Feed Header
           const Text(
-            "LIVE ACTION FEED",
+            "LIVE ACTION & DIALOGUE FEED",
             style: TextStyle(
               color: Color(0xFFFFD700),
-              fontSize: 11,
+              fontSize: 10.5,
               fontWeight: FontWeight.bold,
-              letterSpacing: 1.0,
+              letterSpacing: 0.8,
             ),
           ),
           const SizedBox(height: 6),
@@ -250,7 +313,7 @@ class TelemetryHud extends StatelessWidget {
                             const SizedBox(height: 2),
                             Text(
                               log.description,
-                              style: const TextStyle(color: Colors.white70, fontSize: 11),
+                              style: const TextStyle(color: Colors.white70, fontSize: 10.5),
                             ),
                           ],
                         );

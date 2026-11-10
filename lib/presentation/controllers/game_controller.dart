@@ -12,11 +12,13 @@ class MoveLogEntry {
   final String playerName;
   final String description;
   final String timestamp;
+  final TacticalIntent? intent;
 
   const MoveLogEntry({
     required this.playerName,
     required this.description,
     required this.timestamp,
+    this.intent,
   });
 }
 
@@ -43,6 +45,13 @@ class GameController extends ChangeNotifier {
   static const int turnMaxSeconds = 20;
   int remainingTurnSeconds = turnMaxSeconds;
   Timer? _turnTimer;
+
+  // Bot Speech Bubble & Brain Telemetry
+  int? activeSpeakerSeat;
+  String? activeSpeechText;
+  TacticalIntent? latestBotIntent;
+  String? latestBotThought;
+  Timer? _speechBubbleTimer;
 
   GameController() {
     startNewGame(GameMode.twoVsTwoHumanAi);
@@ -89,8 +98,24 @@ class GameController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setBotSpeech(int seatIndex, String text, [TacticalIntent? intent, String? thought]) {
+    _speechBubbleTimer?.cancel();
+    activeSpeakerSeat = seatIndex;
+    activeSpeechText = text;
+    if (intent != null) latestBotIntent = intent;
+    if (thought != null) latestBotThought = thought;
+    notifyListeners();
+
+    _speechBubbleTimer = Timer(const Duration(milliseconds: 3800), () {
+      activeSpeechText = null;
+      activeSpeakerSeat = null;
+      notifyListeners();
+    });
+  }
+
   void startNewGame(GameMode newMode) {
     _turnTimer?.cancel();
+    _speechBubbleTimer?.cancel();
     mode = newMode;
     deck.reset();
     board.chips.fillRange(0, 100, TeamId.none);
@@ -109,6 +134,10 @@ class GameController extends ChangeNotifier {
     currentTurnIndex = 0;
     isAiThinking = false;
     remainingTurnSeconds = turnMaxSeconds;
+    activeSpeakerSeat = null;
+    activeSpeechText = null;
+    latestBotIntent = null;
+    latestBotThought = null;
 
     // Build players based on mode
     players.clear();
@@ -150,6 +179,14 @@ class GameController extends ChangeNotifier {
     }
 
     _log("Game started: ${_modeName(mode)}. Good luck!");
+
+    // Opening partner greeting
+    if (mode == GameMode.twoVsTwoHumanAi) {
+      Future.delayed(const Duration(milliseconds: 700), () {
+        setBotSpeech(2, "Let's win this together, partner! I've got your back on the grid.");
+      });
+    }
+
     _startTurnTimer();
     notifyListeners();
   }
@@ -195,15 +232,16 @@ class GameController extends ChangeNotifier {
     }
   }
 
-  void _log(String message, {String? playerName}) {
+  void _log(String message, {String? playerName, TacticalIntent? intent}) {
     final now = DateTime.now();
     final timeStr = "${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}";
     moveLogs.insert(0, MoveLogEntry(
       playerName: playerName ?? "System",
       description: message,
       timestamp: timeStr,
+      intent: intent,
     ));
-    if (moveLogs.length > 20) {
+    if (moveLogs.length > 25) {
       moveLogs.removeLast();
     }
   }
@@ -294,6 +332,11 @@ class GameController extends ChangeNotifier {
         HapticsService.sequenceFormed();
         _log("★ FORMED A NEW SEQUENCE! Total: ${board.completedSequences[currentPlayer.team]?.length}/$requiredSequencesToWin",
             playerName: currentPlayer.name);
+
+        // Partner reaction to human sequence
+        if (currentPlayer.isHuman && mode == GameMode.twoVsTwoHumanAi) {
+          setBotSpeech(2, "PHENOMENAL MOVE PARTNER! Sequence secured!");
+        }
       }
     }
 
@@ -343,7 +386,7 @@ class GameController extends ChangeNotifier {
     isAiThinking = true;
     notifyListeners();
 
-    await Future.delayed(const Duration(milliseconds: 650));
+    await Future.delayed(const Duration(milliseconds: 700));
     if (winningTeam != null) {
       isAiThinking = false;
       return;
@@ -382,6 +425,17 @@ class GameController extends ChangeNotifier {
     );
 
     if (bestMove != null) {
+      setBotSpeech(
+        currentPlayer.seatIndex,
+        bestMove.dialogue,
+        bestMove.intent,
+        bestMove.strategyReason,
+      );
+      _log(
+        "Played ${bestMove.card.id} at ${bestMove.coord} — \"${bestMove.dialogue}\"",
+        playerName: currentPlayer.name,
+        intent: bestMove.intent,
+      );
       _executeMove(bestMove.card, bestMove.coord, isRemoval: bestMove.isRemoval);
     } else {
       if (currentPlayer.hand.isNotEmpty) {
@@ -399,6 +453,7 @@ class GameController extends ChangeNotifier {
   @override
   void dispose() {
     _turnTimer?.cancel();
+    _speechBubbleTimer?.cancel();
     super.dispose();
   }
 }
