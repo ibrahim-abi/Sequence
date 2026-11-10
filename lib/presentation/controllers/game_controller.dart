@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../../core/models/card.dart';
 import '../../core/models/board_layout.dart';
@@ -5,6 +6,7 @@ import '../../core/models/game_state.dart';
 import '../../core/engine/sequence_rules.dart';
 import '../../core/engine/card_tracker.dart';
 import '../../core/ai/mathematical_ai.dart';
+import '../../core/audio_haptics/haptics_service.dart';
 
 class MoveLogEntry {
   final String playerName;
@@ -36,6 +38,11 @@ class GameController extends ChangeNotifier {
 
   final List<PlayingCard> discardPile = [];
   final List<MoveLogEntry> moveLogs = [];
+
+  // Turn Countdown Timer (20 seconds)
+  static const int turnMaxSeconds = 20;
+  int remainingTurnSeconds = turnMaxSeconds;
+  Timer? _turnTimer;
 
   GameController() {
     startNewGame(GameMode.twoVsTwoHumanAi);
@@ -83,6 +90,7 @@ class GameController extends ChangeNotifier {
   }
 
   void startNewGame(GameMode newMode) {
+    _turnTimer?.cancel();
     mode = newMode;
     deck.reset();
     board.chips.fillRange(0, 100, TeamId.none);
@@ -100,6 +108,7 @@ class GameController extends ChangeNotifier {
     lastMoveCoord = null;
     currentTurnIndex = 0;
     isAiThinking = false;
+    remainingTurnSeconds = turnMaxSeconds;
 
     // Build players based on mode
     players.clear();
@@ -141,6 +150,7 @@ class GameController extends ChangeNotifier {
     }
 
     _log("Game started: ${_modeName(mode)}. Good luck!");
+    _startTurnTimer();
     notifyListeners();
   }
 
@@ -157,6 +167,34 @@ class GameController extends ChangeNotifier {
     }
   }
 
+  void _startTurnTimer() {
+    _turnTimer?.cancel();
+    remainingTurnSeconds = turnMaxSeconds;
+
+    _turnTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (winningTeam != null) {
+        timer.cancel();
+        return;
+      }
+
+      if (remainingTurnSeconds > 0) {
+        remainingTurnSeconds--;
+        notifyListeners();
+      } else {
+        timer.cancel();
+        _onTurnTimeout();
+      }
+    });
+  }
+
+  void _onTurnTimeout() {
+    if (winningTeam != null) return;
+    if (currentPlayer.isHuman && !isAiThinking) {
+      _log("Time out! Auto-play fallback engaged.", playerName: currentPlayer.name);
+      _runAiTurnForCurrentPlayer();
+    }
+  }
+
   void _log(String message, {String? playerName}) {
     final now = DateTime.now();
     final timeStr = "${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}";
@@ -170,7 +208,6 @@ class GameController extends ChangeNotifier {
     }
   }
 
-  /// Discard a dead card and draw a fresh replacement
   bool swapDeadCard(PlayingCard card) {
     if (!currentPlayer.isHuman || winningTeam != null || isAiThinking) return false;
     if (!board.isCardDead(card)) return false;
@@ -197,7 +234,6 @@ class GameController extends ChangeNotifier {
     return deck.draw();
   }
 
-  /// Attempt human move by clicking a board coordinate
   bool playHumanMove(int r, int c) {
     if (winningTeam != null || isAiThinking) return false;
     if (!currentPlayer.isHuman) return false;
@@ -220,13 +256,12 @@ class GameController extends ChangeNotifier {
         if (BoardLayout.isCorner(r, c)) return false;
         final chip = board.getChip(r, c);
         if (chip == TeamId.none || chip == currentPlayer.team) return false;
-        if (board.isLocked(r, c)) return false; // Protected
+        if (board.isLocked(r, c)) return false;
 
         _executeMove(cardToPlay, target, isRemoval: true);
         return true;
       }
     } else {
-      // Normal card
       final validCoords = BoardLayout.cardToCoords[cardToPlay.id];
       if (validCoords == null || !validCoords.contains(target)) return false;
       if (board.getChip(r, c) != TeamId.none) return false;
@@ -244,6 +279,8 @@ class GameController extends ChangeNotifier {
     cardTracker.observeDiscard(card);
     lastMoveCoord = target;
 
+    HapticsService.chipPlaced();
+
     if (isRemoval) {
       board.setChip(target.r, target.c, TeamId.none);
       _log("Played One-Eyed Jack (${card.id}) removing enemy chip at $target", playerName: currentPlayer.name);
@@ -251,16 +288,15 @@ class GameController extends ChangeNotifier {
       board.setChip(target.r, target.c, currentPlayer.team);
       _log("Played ${card.id} at $target", playerName: currentPlayer.name);
 
-      // Check if sequence formed
       final newSeqs = board.checkNewSequences(target, currentPlayer.team);
       if (newSeqs.isNotEmpty) {
         board.registerSequences(newSeqs, currentPlayer.team);
+        HapticsService.sequenceFormed();
         _log("★ FORMED A NEW SEQUENCE! Total: ${board.completedSequences[currentPlayer.team]?.length}/$requiredSequencesToWin",
             playerName: currentPlayer.name);
       }
     }
 
-    // Draw replacement card
     final drawn = _drawOrRecycle();
     if (drawn != null) {
       currentPlayer.hand.add(drawn);
@@ -268,16 +304,15 @@ class GameController extends ChangeNotifier {
 
     selectedCard = null;
 
-    // Check victory condition
     final teamSeqs = board.completedSequences[currentPlayer.team]?.length ?? 0;
     if (teamSeqs >= requiredSequencesToWin) {
       winningTeam = currentPlayer.team;
+      _turnTimer?.cancel();
       _log("🏆 Team ${_teamName(winningTeam!)} WINS THE GAME!");
       notifyListeners();
       return;
     }
 
-    // Advance turn
     _advanceTurn();
   }
 
@@ -296,9 +331,9 @@ class GameController extends ChangeNotifier {
 
   void _advanceTurn() {
     currentTurnIndex = (currentTurnIndex + 1) % players.length;
+    _startTurnTimer();
     notifyListeners();
 
-    // If next player is AI, trigger AI decision after smooth delay
     if (!currentPlayer.isHuman && winningTeam == null) {
       _runAiTurn();
     }
@@ -308,14 +343,18 @@ class GameController extends ChangeNotifier {
     isAiThinking = true;
     notifyListeners();
 
-    // 600ms casino delay so human can follow AI moves
     await Future.delayed(const Duration(milliseconds: 650));
     if (winningTeam != null) {
       isAiThinking = false;
       return;
     }
 
-    // Check dead cards for AI first
+    _runAiTurnForCurrentPlayer();
+    isAiThinking = false;
+    notifyListeners();
+  }
+
+  void _runAiTurnForCurrentPlayer() {
     final deadCards = currentPlayer.hand.where((c) => board.isCardDead(c)).toList();
     if (deadCards.isNotEmpty) {
       final dead = deadCards.first;
@@ -327,16 +366,13 @@ class GameController extends ChangeNotifier {
         currentPlayer.hand.add(drawn);
       }
       _log("Exchanged dead card ${dead.id}", playerName: currentPlayer.name);
-      await Future.delayed(const Duration(milliseconds: 250));
     }
 
-    // Sum other players' cards
     int otherCards = 0;
     for (final p in players) {
       if (p != currentPlayer) otherCards += p.hand.length;
     }
 
-    // High performance mathematical heuristic evaluation
     final bestMove = aiEngine.chooseMove(
       aiPlayer: currentPlayer,
       board: board,
@@ -348,7 +384,6 @@ class GameController extends ChangeNotifier {
     if (bestMove != null) {
       _executeMove(bestMove.card, bestMove.coord, isRemoval: bestMove.isRemoval);
     } else {
-      // Discard first card if no valid moves exist (emergency fallback)
       if (currentPlayer.hand.isNotEmpty) {
         final c = currentPlayer.hand.removeAt(0);
         discardPile.add(c);
@@ -359,8 +394,11 @@ class GameController extends ChangeNotifier {
       }
       _advanceTurn();
     }
+  }
 
-    isAiThinking = false;
-    notifyListeners();
+  @override
+  void dispose() {
+    _turnTimer?.cancel();
+    super.dispose();
   }
 }

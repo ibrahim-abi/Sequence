@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'core/models/card.dart';
 import 'core/models/game_state.dart';
+import 'core/audio_haptics/haptics_service.dart';
 import 'presentation/controllers/game_controller.dart';
 import 'presentation/painters/board_painter.dart';
-import 'presentation/widgets/player_hand_bar.dart';
+import 'presentation/widgets/curved_hand_fan.dart';
 import 'presentation/widgets/telemetry_hud.dart';
 import 'presentation/widgets/lobby_dialog.dart';
+import 'presentation/widgets/top_players_bar.dart';
+import 'features/lobby/widgets/matchmaking_radar_dialog.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,7 +24,7 @@ class SequenceApp extends StatelessWidget {
       title: 'Sequence Pro — 2v2 Mathematical AI',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF041210),
+        scaffoldBackgroundColor: const Color(0xFF04120E),
       ),
       home: const SequenceGameScreen(),
     );
@@ -65,91 +68,19 @@ class _SequenceGameScreenState extends State<SequenceGameScreen> {
           Navigator.of(ctx).pop();
           _controller.startNewGame(mode);
         },
+        onStartRadarMatchmaking: _showRadarDialog,
       ),
     );
   }
 
-  Widget _buildTopFourPlayersBar() {
-    return Container(
-      height: 54,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFF061A16),
-        border: Border(
-          bottom: BorderSide(
-            color: const Color(0xFFD4AF37).withValues(alpha: 0.35),
-            width: 1.2,
-          ),
-        ),
-      ),
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: _controller.players.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final p = _controller.players[index];
-          final isTurn = _controller.currentPlayer == p;
-          final color = p.team == TeamId.blue
-              ? const Color(0xFF2563EB)
-              : p.team == TeamId.green
-                  ? const Color(0xFF059669)
-                  : const Color(0xFFDC2626);
-
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-            decoration: BoxDecoration(
-              color: isTurn ? color.withValues(alpha: 0.3) : const Color(0xFF0B2B26),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: isTurn ? const Color(0xFFFFD700) : Colors.white12,
-                width: isTurn ? 1.8 : 1.0,
-              ),
-              boxShadow: isTurn
-                  ? [
-                      BoxShadow(
-                        color: const Color(0xFFFFD700).withValues(alpha: 0.35),
-                        blurRadius: 6,
-                        spreadRadius: 1,
-                      )
-                    ]
-                  : null,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                ),
-                const SizedBox(width: 6),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      p.name,
-                      style: TextStyle(
-                        color: isTurn ? Colors.white : Colors.white70,
-                        fontSize: 11,
-                        fontWeight: isTurn ? FontWeight.w900 : FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      isTurn ? (p.isHuman ? "ACTIVE (YOU)" : "THINKING...") : "${p.hand.length} cards",
-                      style: TextStyle(
-                        color: isTurn ? const Color(0xFFFFD700) : Colors.white38,
-                        fontSize: 8.5,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          );
+  void _showRadarDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => MatchmakingRadarDialog(
+        mode: GameMode.twoVsTwoHumanAi,
+        onMatchReady: (mode) {
+          _controller.startNewGame(mode);
         },
       ),
     );
@@ -157,13 +88,13 @@ class _SequenceGameScreenState extends State<SequenceGameScreen> {
 
   Widget _buildDeckVisual() {
     return Container(
-      width: 110,
-      padding: const EdgeInsets.all(12),
+      width: 105,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF041512),
+        color: const Color(0xFF030D0A),
         border: Border(
           right: BorderSide(
-            color: const Color(0xFFD4AF37).withValues(alpha: 0.3),
+            color: const Color(0xFFD4AF37).withValues(alpha: 0.25),
             width: 1.2,
           ),
         ),
@@ -175,53 +106,50 @@ class _SequenceGameScreenState extends State<SequenceGameScreen> {
             "DRAW DECK",
             style: TextStyle(
               color: Color(0xFFFFD700),
-              fontSize: 11,
+              fontSize: 10.5,
               fontWeight: FontWeight.w900,
               letterSpacing: 1.0,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
-          // 3D Stack of Cards Representation
+          // 3D Stack of Cards
           Stack(
             alignment: Alignment.center,
             children: [
-              // Bottom card shadow
               Transform.translate(
-                offset: const Offset(4, 4),
+                offset: const Offset(3.5, 3.5),
                 child: _buildDeckCardBack(),
               ),
-              // Middle card
               Transform.translate(
-                offset: const Offset(2, 2),
+                offset: const Offset(1.8, 1.8),
                 child: _buildDeckCardBack(),
               ),
-              // Top active card
               _buildDeckCardBack(),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Text(
             "${_controller.deck.remaining} CARDS",
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
 
-          // Discard Pile Top
+          // Discard Pile
           const Text(
             "DISCARD",
             style: TextStyle(
               color: Color(0xFFFF6B6B),
-              fontSize: 10.5,
+              fontSize: 10,
               fontWeight: FontWeight.bold,
               letterSpacing: 1.0,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           if (_controller.discardPile.isNotEmpty)
             _buildDiscardCardFace(_controller.discardPile.last)
           else
@@ -229,11 +157,11 @@ class _SequenceGameScreenState extends State<SequenceGameScreen> {
               width: 55,
               height: 75,
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.white12, style: BorderStyle.solid),
+                border: Border.all(color: Colors.white12),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: const Center(
-                child: Text("EMPTY", style: TextStyle(color: Colors.white24, fontSize: 9)),
+                child: Text("EMPTY", style: TextStyle(color: Colors.white24, fontSize: 8.5)),
               ),
             ),
         ],
@@ -243,8 +171,8 @@ class _SequenceGameScreenState extends State<SequenceGameScreen> {
 
   Widget _buildDeckCardBack() {
     return Container(
-      width: 60,
-      height: 85,
+      width: 58,
+      height: 82,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF831843), Color(0xFF4C0519)],
@@ -252,7 +180,7 @@ class _SequenceGameScreenState extends State<SequenceGameScreen> {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFFFFD700), width: 1.5),
+        border: Border.all(color: const Color(0xFFFFD700), width: 1.4),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.5),
@@ -262,16 +190,16 @@ class _SequenceGameScreenState extends State<SequenceGameScreen> {
         ],
       ),
       child: const Center(
-        child: Icon(Icons.style, color: Color(0xFFFFD700), size: 24),
+        child: Icon(Icons.style, color: Color(0xFFFFD700), size: 22),
       ),
     );
   }
 
-  Widget _buildDiscardCardFace(card) {
+  Widget _buildDiscardCardFace(PlayingCard card) {
     final isRed = card.isRed;
     return Container(
-      width: 60,
-      height: 85,
+      width: 58,
+      height: 82,
       decoration: BoxDecoration(
         color: const Color(0xFFFAF6F0),
         borderRadius: BorderRadius.circular(6),
@@ -291,16 +219,16 @@ class _SequenceGameScreenState extends State<SequenceGameScreen> {
             Text(
               card.rankLabel,
               style: TextStyle(
-                color: isRed ? const Color(0xFFDC2626) : const Color(0xFF1E293B),
-                fontSize: 16,
+                color: isRed ? const Color(0xFFDC2626) : const Color(0xFF0F172A),
+                fontSize: 15,
                 fontWeight: FontWeight.w900,
               ),
             ),
             Text(
               card.suitSymbol,
               style: TextStyle(
-                color: isRed ? const Color(0xFFDC2626) : const Color(0xFF1E293B),
-                fontSize: 18,
+                color: isRed ? const Color(0xFFDC2626) : const Color(0xFF0F172A),
+                fontSize: 17,
               ),
             ),
           ],
@@ -313,30 +241,51 @@ class _SequenceGameScreenState extends State<SequenceGameScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF061815),
+        backgroundColor: const Color(0xFF04120E),
         elevation: 0,
         title: Row(
           children: [
-            const Icon(Icons.style, color: Color(0xFFFFD700)),
+            const Icon(Icons.casino, color: Color(0xFFFFD700), size: 22),
             const SizedBox(width: 8),
             const Text(
-              "SEQUENCE — PRO 2v2 EDITION",
+              "SEQUENCE — PRO 2v2",
               style: TextStyle(
                 color: Color(0xFFFFD700),
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                fontSize: 15,
                 letterSpacing: 1.1,
               ),
             ),
-            const SizedBox(width: 16),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.settings, size: 16, color: Color(0xFFFFD700)),
+            const SizedBox(width: 12),
+
+            // Quick Play Radar Button
+            ElevatedButton.icon(
+              icon: const Icon(Icons.radar, size: 15, color: Colors.black),
               label: const Text(
-                "GAME MODE",
-                style: TextStyle(color: Color(0xFFFFD700), fontSize: 12),
+                "QUICK MATCH",
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 11,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFFD700),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              ),
+              onPressed: _showRadarDialog,
+            ),
+            const SizedBox(width: 8),
+
+            OutlinedButton.icon(
+              icon: const Icon(Icons.settings, size: 15, color: Color(0xFFFFD700)),
+              label: const Text(
+                "LOBBY",
+                style: TextStyle(color: Color(0xFFFFD700), fontSize: 11),
               ),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: Color(0xFFD4AF37)),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               ),
               onPressed: _showLobbyDialog,
             ),
@@ -345,40 +294,45 @@ class _SequenceGameScreenState extends State<SequenceGameScreen> {
       ),
       body: Row(
         children: [
-          // Left Side: 3D Visual Draw Deck & Discard Pile
+          // Left Side: 3D Visual Draw Deck & Discard Tray
           _buildDeckVisual(),
 
-          // Center: Top 4-Player Indicators + 10x10 Board Stage + Hand Bar
+          // Center: Top Players Bar + Interactive 10x10 Board Stage + Curved Fan Hand
           Expanded(
             child: Column(
               children: [
-                // Top All-Players Seating & Turn Indicator
-                _buildTopFourPlayersBar(),
+                // Top 4-Player Seating Bar with 20s Circular Countdown Timer
+                TopPlayersBar(controller: _controller),
 
-                // 10x10 Board Stage
+                // 10x10 Board Stage with InteractiveViewer (Pinch-to-zoom on Mobile)
                 Expanded(
                   child: Center(
                     child: Padding(
-                      padding: const EdgeInsets.all(12.0),
+                      padding: const EdgeInsets.all(8.0),
                       child: AspectRatio(
                         aspectRatio: 1.0,
                         child: LayoutBuilder(
                           builder: (context, constraints) {
-                            return GestureDetector(
-                              onTapUp: (details) {
-                                final cellSize = constraints.maxWidth / 10.0;
-                                final col = (details.localPosition.dx / cellSize).floor().clamp(0, 9);
-                                final row = (details.localPosition.dy / cellSize).floor().clamp(0, 9);
-                                _controller.playHumanMove(row, col);
-                              },
-                              child: CustomPaint(
-                                size: Size(constraints.maxWidth, constraints.maxHeight),
-                                painter: BoardPainter(
-                                  boardState: _controller.board,
-                                  hoveredCard: _controller.selectedCard ?? _controller.hoveredCard,
-                                  selectedCoord: _controller.lastMoveCoord,
-                                  lastMoveCoord: _controller.lastMoveCoord,
-                                  currentTurnTeam: _controller.currentPlayer.team,
+                            return InteractiveViewer(
+                              minScale: 1.0,
+                              maxScale: 2.5,
+                              child: GestureDetector(
+                                onTapUp: (details) {
+                                  final cellSize = constraints.maxWidth / 10.0;
+                                  final col = (details.localPosition.dx / cellSize).floor().clamp(0, 9);
+                                  final row = (details.localPosition.dy / cellSize).floor().clamp(0, 9);
+                                  HapticsService.cardSelect();
+                                  _controller.playHumanMove(row, col);
+                                },
+                                child: CustomPaint(
+                                  size: Size(constraints.maxWidth, constraints.maxHeight),
+                                  painter: BoardPainter(
+                                    boardState: _controller.board,
+                                    hoveredCard: _controller.selectedCard ?? _controller.hoveredCard,
+                                    selectedCoord: _controller.lastMoveCoord,
+                                    lastMoveCoord: _controller.lastMoveCoord,
+                                    currentTurnTeam: _controller.currentPlayer.team,
+                                  ),
                                 ),
                               ),
                             );
@@ -389,8 +343,8 @@ class _SequenceGameScreenState extends State<SequenceGameScreen> {
                   ),
                 ),
 
-                // Player Hand Bar at bottom
-                PlayerHandBar(controller: _controller),
+                // Bottom Curved Fan Hand Dock with -24px Lift & Dead Card Swap
+                CurvedHandFan(controller: _controller),
               ],
             ),
           ),

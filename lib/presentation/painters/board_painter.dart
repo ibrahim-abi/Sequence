@@ -25,7 +25,7 @@ class BoardPainter extends CustomPainter {
     final cellWidth = size.width / 10.0;
     final cellHeight = size.height / 10.0;
 
-    // 1. Luxury Casino Emerald Felt Background with Vignette & Micro-Texture
+    // 1. Luxury Casino Emerald Felt Background with Vignette
     final bgPaint = Paint()
       ..shader = const RadialGradient(
         center: Alignment.center,
@@ -45,10 +45,10 @@ class BoardPainter extends CustomPainter {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Color(0xFFFFDF73), // Bright gold shine
-          Color(0xFFB38728), // Deep antique brass
-          Color(0xFFFBF5B7), // Specular light hit
-          Color(0xFFAA771C), // Rich shadow gold
+          Color(0xFFFFDF73),
+          Color(0xFFB38728),
+          Color(0xFFFBF5B7),
+          Color(0xFFAA771C),
         ],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
       ..style = PaintingStyle.stroke
@@ -62,7 +62,7 @@ class BoardPainter extends CustomPainter {
       outerFramePaint,
     );
 
-    // Collect valid hover targets
+    // Collect valid hover targets for Spotlight
     final hoverTargets = <BoardCoordinate>{};
     bool isTwoEyedJackHover = false;
     bool isOneEyedJackHover = false;
@@ -82,18 +82,13 @@ class BoardPainter extends CustomPainter {
       }
     }
 
+    final hasActiveSpotlight = hoveredCard != null;
+
     // 3. Render 100 Board Cells (Cards & Corners)
     for (int r = 0; r < 10; r++) {
       for (int c = 0; c < 10; c++) {
-        final rect = Rect.fromLTWH(
-          c * cellWidth + 2.5,
-          r * cellHeight + 2.5,
-          cellWidth - 5.0,
-          cellHeight - 5.0,
-        );
-        final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(7.0));
-        final code = BoardLayout.matrix[r][c];
         final isCorner = BoardLayout.isCorner(r, c);
+        final code = BoardLayout.matrix[r][c];
 
         final isTargeted = hoverTargets.contains(BoardCoordinate(r, c));
         final isJackValidEmpty = isTwoEyedJackHover && !isCorner && boardState.getChip(r, c) == TeamId.none;
@@ -103,10 +98,24 @@ class BoardPainter extends CustomPainter {
             boardState.getChip(r, c) != currentTurnTeam &&
             !boardState.isLocked(r, c);
 
+        final isHighlighted = isTargeted || isJackValidEmpty || isJackRemovable;
+
+        // Slight pop-out scale for spotlighted cells
+        final scaleInflation = isHighlighted ? 1.5 : 0.0;
+        final rect = Rect.fromLTWH(
+          c * cellWidth + 2.5 - scaleInflation,
+          r * cellHeight + 2.5 - scaleInflation,
+          cellWidth - 5.0 + (scaleInflation * 2),
+          cellHeight - 5.0 + (scaleInflation * 2),
+        );
+        final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(7.0));
+
         // Draw Card Multi-Layer Shadow for 3D elevation
         final cardShadowPaint = Paint()
-          ..color = Colors.black.withValues(alpha: 0.5)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5);
+          ..color = isHighlighted
+              ? const Color(0xFFFFD700).withValues(alpha: 0.45)
+              : Colors.black.withValues(alpha: 0.5)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, isHighlighted ? 5.0 : 2.5);
         canvas.drawRRect(rrect.shift(const Offset(0.5, 1.5)), cardShadowPaint);
 
         // Card Face Gradient
@@ -121,7 +130,7 @@ class BoardPainter extends CustomPainter {
           cardFacePaint.shader = LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: isTargeted
+            colors: isHighlighted
                 ? [const Color(0xFFFFFBEB), const Color(0xFFFEF3C7)]
                 : [const Color(0xFFFFFFFF), const Color(0xFFF4EDE4)],
           ).createShader(rect);
@@ -131,7 +140,7 @@ class BoardPainter extends CustomPainter {
         // Card Border with subtle metallic or glow effect
         final cardBorderPaint = Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = (isTargeted || isJackValidEmpty || isJackRemovable) ? 2.5 : 1.0;
+          ..strokeWidth = isHighlighted ? 3.0 : 1.0;
 
         if (isCorner) {
           cardBorderPaint.color = const Color(0xFFFFD700);
@@ -178,6 +187,14 @@ class BoardPainter extends CustomPainter {
           _drawRemovalMarker(canvas, rect.center, min(cellWidth, cellHeight) * 0.40);
         }
 
+        // Tap-to-Spotlight UX: Dim non-matching cells with Dark Dim Overlay
+        if (hasActiveSpotlight && !isHighlighted && !isCorner) {
+          final dimPaint = Paint()
+            ..color = Colors.black.withValues(alpha: 0.52)
+            ..style = PaintingStyle.fill;
+          canvas.drawRRect(rrect, dimPaint);
+        }
+
         // Last Move Pulse Ring
         if (lastMoveCoord != null && lastMoveCoord!.r == r && lastMoveCoord!.c == c) {
           final lastMoveGlow = Paint()
@@ -195,7 +212,6 @@ class BoardPainter extends CustomPainter {
   }
 
   void _drawCornerSymbol(Canvas canvas, Rect rect) {
-    // Elegant Casino Gold Star
     final starPainter = TextPainter(
       text: const TextSpan(
         text: '★\nFREE',
